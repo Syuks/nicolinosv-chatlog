@@ -1,0 +1,92 @@
+.chat-container {
+  font-family: "Lucida Console", "Consolas", "Monaco", monospace;
+  background-color: #1a1a1a; /* Dark background */
+  color: #cccccc; /* Light grey text */
+  padding: 15px;
+  border-radius: 5px;
+  max-height: 500px; /* Or any height you prefer */
+  overflow-y: auto;
+  border: 1px solid #333;
+}
+
+.chat-container.loading,
+.chat-container.error,
+.chat-container.empty {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100px; /* Give some height to see the message */
+  font-style: italic;
+}
+
+.chat-container.error {
+  color: #ff6b6b; /* Red for errors */
+}
+
+.message-list {
+  list-style-type: none;
+  padding: 0;
+  margin: 0;
+}
+
+.message-item {
+  padding: 3px 0;
+  line-height: 1.4;
+  word-wrap: break-word; /* Ensure long messages wrap */
+}
+
+.day-separator {
+  text-align: center;
+  color: #777777;
+  font-style: italic;
+  padding: 10px 0;
+  margin: 5px 0;
+  border-bottom: 1px solid #444;
+  border-top: 1px solid #444;
+}
+
+.message-dead {
+  color: #ff8080; /* A reddish tint for dead players, common in CS */
+  font-weight: bold;
+}
+
+.message-team-indicator {
+  color: #87cefa; /* Light blue for team indicator */
+  /* In CS 1.6, team chat often has a (TEAM) prefix and name is colored based on team */
+  /* This is a simplified version */
+}
+
+.message-player-name {
+  color: #4caf50; /* Green for player names, like CTs in CS */
+  /* You could alternate or use a different color for T side if that info was parsed */
+  font-weight: bold;
+}
+
+.message-colon {
+  color: #cccccc;
+}
+
+.message-text {
+  color: #e0e0e0; /* Slightly brighter for the message itself */
+}
+
+.message-time {
+  color: #888888; /* Dimmer color for the timestamp */
+  font-size: 0.85em;
+  margin-left: 5px;
+}
+
+/* Scrollbar styling (optional, for a more "gamey" feel) */
+.chat-container::-webkit-scrollbar {
+  width: 8px;
+}
+
+.chat-container::-webkit-scrollbar-track {
+  background: #2c2c2c;
+}
+
+.chat-container::-webkit-scrollbar-thumb {
+  background-color: #555;
+  border-radius: 4px;
+  border: 1px solid #2c2c2c;
+}

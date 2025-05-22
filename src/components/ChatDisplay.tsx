@@ -1,136 +1,384 @@
-import React, { useEffect, useState } from "react";
-import "./ChatDisplay.css"; // We'll create this CSS file next
+import React, { useEffect, useState, useMemo, useCallback, useRef } from "react"
+import { FixedSizeList as List } from "react-window"
+import "./ChatDisplay.css"
+import DateSearch from "./DateSearch"
 
 export interface ParsedChatMessage {
-  id: string; // Unique ID for React key
-  fullDate: string; // MM/DD/YYYY
-  time: string; // HH:MM:SS
-  playerName: string;
-  message: string;
-  isTeamChat: boolean;
-  isDead: boolean;
-  rawLine: string; // Original line for debugging or fallback
+    id: string
+    fullDate: string
+    time: string
+    playerName: string
+    message: string
+    isTeamChat: boolean
+    isDead: boolean
+    team: "C" | "T" | "S" | ""
+    rawLine: string
+    isDateSeparator?: boolean
 }
 
-const parseLogLine = (
-  line: string,
-  index: number
-): ParsedChatMessage | null => {
-  // Regex to capture: Date, Time, PlayerName, say/say_team, Message, (dead)
-  // L 06/21/2020 - 21:34:02: "AmorDChat<16><STEAM_1:0:1238961968><CT>" say_team "subi"
-  // L 06/21/2020 - 21:46:17: "fran<21><STEAM_ID_LAN><CT>" say_team "arriba" (dead)
-  const regex =
-    /^L (\d{2}\/\d{2}\/\d{4}) - (\d{2}:\d{2}:\d{2}): "([^<]+)<[^>]+><[^>]+><[^>]+>" (say|say_team) "(.*?)"(?:\s*\(dead\))?$/;
-  const match = line.match(regex);
+const parseLogLine = (line: string, index: number): ParsedChatMessage | null => {
+    if (!line || line.trim() === "") return null
 
-  if (match) {
+    const parts = line.split("¬")
+    if (parts.length < 5) {
+        console.warn("Line doesn't have enough parts:", line)
+        return null
+    }
+
+    const fullDate = parts[0]
+    const time = parts[1]
+
+    const playerInfo = parts[2]
+    const teamMatch = playerInfo.match(/(.*)<([CTS]?)>/)
+
+    if (!teamMatch) {
+        console.warn("Couldn't parse player info:", playerInfo)
+        return null
+    }
+
+    const playerName = teamMatch[1]
+    const team = teamMatch[2] as "C" | "T" | "S" | ""
+
+    const sayOrSayTeam = parts[3] as "y" | "u"
+    const isTeamChat = sayOrSayTeam === "u"
+
+    const message = parts[4]
+    const isDead = parts.length > 5 && parts[5] === "d"
+
     return {
-      id: `msg-${index}-${new Date().getTime()}`, // Simple unique ID
-      fullDate: match[1],
-      time: match[2],
-      playerName: match[3],
-      isTeamChat: match[4] === "say_team",
-      message: match[5],
-      isDead: !!match[6] || line.trim().endsWith("(dead)"), // Check for the (dead) group or trailing text
-      rawLine: line,
-    };
-  }
-  console.warn("Could not parse line:", line);
-  return null; // Or return a default structure for unparseable lines
-};
+        id: `msg-${index}-${new Date().getTime()}`,
+        fullDate,
+        time,
+        playerName,
+        message,
+        isTeamChat,
+        isDead,
+        team,
+        rawLine: line,
+    }
+}
+
+interface MessageItemProps {
+    index: number
+    style: React.CSSProperties
+    data: {
+        messages: ParsedChatMessage[]
+        searchTerm: string
+        highlightedIndex: number
+    }
+}
+
+const MessageItem: React.FC<MessageItemProps> = ({ index, style, data }) => {
+    const { messages, searchTerm, highlightedIndex } = data
+    const msg = messages[index]
+
+    if (msg.isDateSeparator) {
+        return (
+            <div style={style} className="day-separator">
+                --- {msg.fullDate} ---
+            </div>
+        )
+    }
+
+    const getPlayerNameClass = (team: string): string => {
+        switch (team) {
+            case "C":
+                return "message-player-name message-player-name-ct"
+            case "T":
+                return "message-player-name message-player-name-t"
+            case "S":
+            default:
+                return "message-player-name message-player-name-spec"
+        }
+    }
+
+    const getTeamName = (team: string): string => {
+        switch (team) {
+            case "C":
+                return "Counter-Terrorist"
+            case "T":
+                return "Terrorist"
+            case "S":
+            default:
+                return "Spectator"
+        }
+    }
+
+    const highlightText = (text: string, term: string): React.ReactNode => {
+        if (!term) return text
+
+        const regex = new RegExp(`(${term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`, "gi")
+        const parts = text.split(regex)
+
+        return parts.map((part, i) =>
+            regex.test(part) ? (
+                <span key={i} className="highlighted-text">
+                    {part}
+                </span>
+            ) : (
+                part
+            )
+        )
+    }
+
+    const isHighlighted = index === highlightedIndex
+
+    return (
+        <div style={style} className={`message-item ${isHighlighted ? "highlighted" : ""}`}>
+            <span className="message-time">[{msg.time.substring(0, 5)}]</span>
+            <div className="message-content">
+                {msg.isDead && <span className="message-dead">*DEAD*</span>}
+                {!msg.isTeamChat && msg.team === "S" && (
+                    <span className="message-team-indicator">*SPEC*</span>
+                )}
+                {msg.isTeamChat && (
+                    <span className="message-team-indicator">({getTeamName(msg.team)})</span>
+                )}
+                <span className={getPlayerNameClass(msg.team)}>
+                    {highlightText(msg.playerName, searchTerm)}
+                </span>
+                <span className="message-colon">:</span>
+                <span className="message-text">{highlightText(msg.message, searchTerm)}</span>
+            </div>
+        </div>
+    )
+}
 
 const ChatDisplay: React.FC = () => {
-  const [messages, setMessages] = useState<ParsedChatMessage[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
+    const [allMessages, setAllMessages] = useState<ParsedChatMessage[]>([])
+    const [loading, setLoading] = useState<boolean>(true)
+    const [error, setError] = useState<string | null>(null)
+    const [searchTerm, setSearchTerm] = useState<string>("")
+    const [selectedDate, setSelectedDate] = useState<string>("")
+    const [currentSearchIndex, setCurrentSearchIndex] = useState<number>(-1)
+    const [searchResults, setSearchResults] = useState<number[]>([])
 
-  useEffect(() => {
-    const fetchAndParseLogs = async () => {
-      try {
-        setLoading(true);
-        const response = await fetch("/all_chat_messages.log"); // Assuming it's in public folder
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
+    const listRef = useRef<List>(null)
+
+    useEffect(() => {
+        const fetchAndParseLogs = async () => {
+            try {
+                setLoading(true)
+                const response = await fetch("/chat_messages.log")
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`)
+                }
+                const textData = await response.text()
+                const lines = textData.split(/\r?\n/)
+
+                const parsedMessages: ParsedChatMessage[] = lines
+                    .map((line, index) => parseLogLine(line, index))
+                    .filter((msg): msg is ParsedChatMessage => msg !== null)
+
+                // Add date separators
+                const messagesWithSeparators: ParsedChatMessage[] = []
+                let lastDate: string | null = null
+
+                parsedMessages.forEach((msg) => {
+                    if (msg.fullDate !== lastDate) {
+                        messagesWithSeparators.push({
+                            id: `separator-${msg.fullDate}`,
+                            fullDate: msg.fullDate,
+                            time: "",
+                            playerName: "",
+                            message: "",
+                            isTeamChat: false,
+                            isDead: false,
+                            team: "",
+                            rawLine: "",
+                            isDateSeparator: true,
+                        })
+                        lastDate = msg.fullDate
+                    }
+                    messagesWithSeparators.push(msg)
+                })
+
+                setAllMessages(messagesWithSeparators)
+                setError(null)
+            } catch (e) {
+                console.error("Failed to load or parse chat logs:", e)
+                if (e instanceof Error) {
+                    setError(
+                        `Failed to load chat logs: ${e.message}. Make sure 'optimized_chat_messages.log' is in the /public directory.`
+                    )
+                } else {
+                    setError("An unknown error occurred while loading chat logs.")
+                }
+            } finally {
+                setLoading(false)
+            }
         }
-        const textData = await response.text();
-        const lines = textData.split(/\r?\n/); // Split by new line
 
-        const parsedMessages: ParsedChatMessage[] = lines
-          .map((line, index) => parseLogLine(line, index))
-          .filter((msg): msg is ParsedChatMessage => msg !== null); // Type guard to remove nulls
+        fetchAndParseLogs()
+    }, [])
 
-        setMessages(parsedMessages);
-        setError(null);
-      } catch (e) {
-        console.error("Failed to load or parse chat logs:", e);
-        if (e instanceof Error) {
-          setError(
-            `Failed to load chat logs: ${e.message}. Make sure 'all_chat_messages.log' is in the /public directory.`
-          );
-        } else {
-          setError("An unknown error occurred while loading chat logs.");
+    // Filter messages by date
+    const dateFilteredMessages = useMemo(() => {
+        if (!selectedDate) return allMessages
+        return allMessages.filter((msg) => msg.isDateSeparator || msg.fullDate === selectedDate)
+    }, [allMessages, selectedDate])
+
+    // Get available dates for the date selector
+    const availableDates = useMemo(() => {
+        const dates = new Set<string>()
+        allMessages.forEach((msg) => {
+            if (!msg.isDateSeparator) {
+                dates.add(msg.fullDate)
+            }
+        })
+        return Array.from(dates).sort()
+    }, [allMessages])
+
+    // Perform search
+    const performSearch = useCallback(() => {
+        if (!searchTerm.trim()) {
+            setSearchResults([])
+            setCurrentSearchIndex(-1)
+            return
         }
-      } finally {
-        setLoading(false);
-      }
-    };
 
-    fetchAndParseLogs();
-  }, []);
+        const term = searchTerm.toLowerCase()
+        const results: number[] = []
 
-  if (loading) {
+        dateFilteredMessages.forEach((msg, index) => {
+            if (msg.isDateSeparator) return
+
+            const searchableText = `${msg.playerName} ${msg.message}`.toLowerCase()
+            if (searchableText.includes(term)) {
+                results.push(index)
+            }
+        })
+
+        setSearchResults(results)
+        setCurrentSearchIndex(results.length > 0 ? 0 : -1)
+
+        // Scroll to the first result
+        if (results.length > 0 && listRef.current) {
+            listRef.current.scrollToItem(results[0], "center")
+        }
+    }, [searchTerm, dateFilteredMessages])
+
+    // Navigate search results
+    const navigateSearch = useCallback(
+        (direction: "next" | "prev") => {
+            if (searchResults.length === 0) return
+
+            let newIndex: number
+            if (direction === "next") {
+                newIndex =
+                    currentSearchIndex >= searchResults.length - 1 ? 0 : currentSearchIndex + 1
+            } else {
+                newIndex =
+                    currentSearchIndex <= 0 ? searchResults.length - 1 : currentSearchIndex - 1
+            }
+
+            setCurrentSearchIndex(newIndex)
+            if (listRef.current) {
+                listRef.current.scrollToItem(searchResults[newIndex], "center")
+            }
+        },
+        [searchResults, currentSearchIndex]
+    )
+
+    // Handle search input
+    const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setSearchTerm(e.target.value)
+    }
+
+    const handleSearchKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
+        if (e.key === "Enter") {
+            performSearch()
+        }
+    }
+
+    // Handle date search
+    const handleDateSearch = (date: string) => {
+        setSelectedDate(date)
+        setSearchTerm("")
+        setSearchResults([])
+        setCurrentSearchIndex(-1)
+    }
+
+    if (loading) {
+        return <div className="chat-container loading">Loading chat messages...</div>
+    }
+
+    if (error) {
+        return <div className="chat-container error">Error: {error}</div>
+    }
+
+    if (allMessages.length === 0) {
+        return <div className="chat-container empty">No chat messages found or parsed.</div>
+    }
+
+    const currentHighlightedIndex =
+        searchResults.length > 0 && currentSearchIndex >= 0 ? searchResults[currentSearchIndex] : -1
+
     return (
-      <div className="chat-container loading">Loading chat messages...</div>
-    );
-  }
+        <>
+            <DateSearch onDateSearch={handleDateSearch} availableDates={availableDates} />
 
-  if (error) {
-    return <div className="chat-container error">Error: {error}</div>;
-  }
+            <div className="chat-container">
+                <div className="search-controls">
+                    <input
+                        type="text"
+                        value={searchTerm}
+                        onChange={handleSearchChange}
+                        onKeyPress={handleSearchKeyPress}
+                        placeholder="Buscar mensajes..."
+                        className="search-input"
+                    />
+                    <button
+                        onClick={performSearch}
+                        className="search-button"
+                        disabled={!searchTerm.trim()}
+                    >
+                        Buscar
+                    </button>
 
-  if (messages.length === 0) {
-    return (
-      <div className="chat-container empty">
-        No chat messages found or parsed.
-      </div>
-    );
-  }
+                    {searchResults.length > 0 && (
+                        <>
+                            <div className="search-info">
+                                {currentSearchIndex + 1} of {searchResults.length}
+                            </div>
+                            <div className="search-navigation">
+                                <button
+                                    onClick={() => navigateSearch("prev")}
+                                    className="nav-button"
+                                    disabled={searchResults.length <= 1}
+                                >
+                                    ↑
+                                </button>
+                                <button
+                                    onClick={() => navigateSearch("next")}
+                                    className="nav-button"
+                                    disabled={searchResults.length <= 1}
+                                >
+                                    ↓
+                                </button>
+                            </div>
+                        </>
+                    )}
+                </div>
 
-  let lastDisplayedDate: string | null = null;
+                <List
+                    ref={listRef}
+                    className="virtualized-list"
+                    width="100%"
+                    height={500}
+                    itemCount={dateFilteredMessages.length}
+                    itemSize={50}
+                    itemData={{
+                        messages: dateFilteredMessages,
+                        searchTerm,
+                        highlightedIndex: currentHighlightedIndex,
+                    }}
+                >
+                    {MessageItem}
+                </List>
+            </div>
+        </>
+    )
+}
 
-  return (
-    <div className="chat-container cs16-chat">
-      <ul className="message-list">
-        {messages.map((msg) => {
-          const showDateSeparator = msg.fullDate !== lastDisplayedDate;
-          if (showDateSeparator) {
-            lastDisplayedDate = msg.fullDate;
-          }
-          return (
-            <React.Fragment key={msg.id}>
-              {showDateSeparator && (
-                <li className="day-separator">--- {msg.fullDate} ---</li>
-              )}
-              <li className="message-item">
-                {msg.isDead && <span className="message-dead">*DEAD* </span>}
-                {msg.isTeamChat && (
-                  <span className="message-team-indicator">(TEAM) </span>
-                )}
-                <span className="message-player-name">{msg.playerName}</span>
-                <span className="message-colon">: </span>
-                <span className="message-text">{msg.message}</span>
-                <span className="message-time">
-                  {" "}
-                  [{msg.time.substring(0, 5)}]
-                </span>{" "}
-                {/* Display HH:MM */}
-              </li>
-            </React.Fragment>
-          );
-        })}
-      </ul>
-    </div>
-  );
-};
-
-export default ChatDisplay;
+export default ChatDisplay

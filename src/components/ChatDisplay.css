@@ -1,92 +1,205 @@
 .chat-container {
-  font-family: "Lucida Console", "Consolas", "Monaco", monospace;
-  background-color: #1a1a1a; /* Dark background */
-  color: #cccccc; /* Light grey text */
-  padding: 15px;
-  border-radius: 5px;
-  max-height: 500px; /* Or any height you prefer */
-  overflow-y: auto;
-  border: 1px solid #333;
+    font-family: "cs1.6-chat", "Consolas";
+    background-color: #1a1a1a; /* Dark background */
+    color: #ffbb1e;
+    padding: 0;
+    border-radius: 5px;
+    border: 1px solid #333;
+    display: flex;
+    flex-direction: column;
+    height: 600px; /* Fixed height for virtualization */
+    width: 100%;
+    max-width: 1000px;
+    box-sizing: border-box;
+}
+
+.search-controls {
+    padding: 10px;
+    background-color: #2a2a2a;
+    border-bottom: 1px solid #333;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.search-input {
+    background-color: #333;
+    border: 1px solid #555;
+    color: #cccccc;
+    padding: 5px 8px;
+    border-radius: 3px;
+    font-family: inherit;
+    font-size: 0.9em;
+    flex: 1;
+}
+
+.search-input:focus {
+    outline: none;
+    border-color: #4caf50;
+}
+
+.search-button {
+    background-color: #4caf50;
+    border: none;
+    color: white;
+    padding: 5px 10px;
+    border-radius: 3px;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 0.9em;
+}
+
+.search-button:hover {
+    background-color: #45a049;
+}
+
+.search-button:disabled {
+    background-color: #555;
+    cursor: not-allowed;
+}
+
+.search-info {
+    color: #888;
+    font-size: 0.85em;
+    white-space: nowrap;
+}
+
+.search-navigation {
+    display: flex;
+    gap: 5px;
+}
+
+.nav-button {
+    background-color: #555;
+    border: none;
+    color: white;
+    padding: 3px 8px;
+    border-radius: 3px;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 0.8em;
+}
+
+.nav-button:hover {
+    background-color: #666;
+}
+
+.nav-button:disabled {
+    background-color: #333;
+    cursor: not-allowed;
+}
+
+.virtualized-list {
+    flex: 1;
+    background-color: #1a1a1a;
 }
 
 .chat-container.loading,
 .chat-container.error,
 .chat-container.empty {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  height: 100px; /* Give some height to see the message */
-  font-style: italic;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100px;
+    font-style: italic;
 }
 
 .chat-container.error {
-  color: #ff6b6b; /* Red for errors */
-}
-
-.message-list {
-  list-style-type: none;
-  padding: 0;
-  margin: 0;
+    color: #ff6b6b;
 }
 
 .message-item {
-  padding: 3px 0;
-  line-height: 1.4;
-  word-wrap: break-word; /* Ensure long messages wrap */
+    /*padding: 8px 15px;*/
+    line-height: 1.4;
+    word-wrap: break-word;
+    /*border-bottom: 1px solid #2a2a2a;*/
+    display: flex;
+    align-items: flex-start;
+    gap: 5px;
+}
+
+.message-item.highlighted {
+    background-color: #2d4a2d;
+    border-left: 3px solid #4caf50;
+    box-sizing: border-box;
 }
 
 .day-separator {
-  text-align: center;
-  color: #777777;
-  font-style: italic;
-  padding: 10px 0;
-  margin: 5px 0;
-  border-bottom: 1px solid #444;
-  border-top: 1px solid #444;
+    text-align: center;
+    color: #777777;
+    font-style: italic;
+    /*padding: 10px 15px;*/
+    margin: 0;
+    border-bottom: 2px solid #444;
+    background-color: #252525;
+    font-weight: bold;
+}
+
+.message-content {
+    display: flex;
+    align-items: baseline;
+    gap: 3px;
+    flex-wrap: wrap;
 }
 
 .message-dead {
-  color: #ff8080; /* A reddish tint for dead players, common in CS */
-  font-weight: bold;
+    flex-shrink: 0;
 }
 
 .message-team-indicator {
-  color: #87cefa; /* Light blue for team indicator */
-  /* In CS 1.6, team chat often has a (TEAM) prefix and name is colored based on team */
-  /* This is a simplified version */
+    flex-shrink: 0;
 }
 
 .message-player-name {
-  color: #4caf50; /* Green for player names, like CTs in CS */
-  /* You could alternate or use a different color for T side if that info was parsed */
-  font-weight: bold;
+    flex-shrink: 0;
+}
+
+.message-player-name-ct {
+    color: #99ccff;
+}
+
+.message-player-name-t {
+    color: #ff3f3f;
+}
+
+.message-player-name-spec {
+    color: #cbcccd;
 }
 
 .message-colon {
-  color: #cccccc;
+    flex-shrink: 0;
 }
 
 .message-text {
-  color: #e0e0e0; /* Slightly brighter for the message itself */
+    word-break: break-word;
+}
+
+.message-text.highlighted-text {
+    background-color: #ffff00;
+    color: #000;
+    padding: 1px 2px;
+    border-radius: 2px;
 }
 
 .message-time {
-  color: #888888; /* Dimmer color for the timestamp */
-  font-size: 0.85em;
-  margin-left: 5px;
+    color: #888888;
+    font-size: 0.85em;
+    flex-shrink: 0;
+    margin-left: 10px;
 }
 
-/* Scrollbar styling (optional, for a more "gamey" feel) */
-.chat-container::-webkit-scrollbar {
-  width: 8px;
+/* Scrollbar styling for the virtualized list */
+.virtualized-list::-webkit-scrollbar {
+    width: 8px;
 }
 
-.chat-container::-webkit-scrollbar-track {
-  background: #2c2c2c;
+.virtualized-list::-webkit-scrollbar-track {
+    background: #2c2c2c;
 }
 
-.chat-container::-webkit-scrollbar-thumb {
-  background-color: #555;
-  border-radius: 4px;
-  border: 1px solid #2c2c2c;
+.virtualized-list::-webkit-scrollbar-thumb {
+    background-color: #555;
+    border-radius: 4px;
+    border: 1px solid #2c2c2c;
 }

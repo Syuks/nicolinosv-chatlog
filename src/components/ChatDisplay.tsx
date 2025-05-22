@@ -158,7 +158,7 @@ const ChatDisplay: React.FC = () => {
         const fetchAndParseLogs = async () => {
             try {
                 setLoading(true)
-                const response = await fetch("/chat_messages.log")
+                const response = await fetch("/chat_messages.txt")
                 if (!response.ok) {
                     throw new Error(`HTTP error! status: ${response.status}`)
                 }

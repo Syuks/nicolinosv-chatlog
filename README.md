@@ -1,1 +1,1 @@
-Chat messages history from Nicolino SV.
+Chat messages log from Nicolino SV.

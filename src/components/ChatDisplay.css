@@ -203,3 +203,10 @@
     border-radius: 4px;
     border: 1px solid #2c2c2c;
 }
+
+@media screen and (max-width: 640px) {
+    .hide-mobile {
+        visibility: hidden;
+        display: none;
+    }
+}

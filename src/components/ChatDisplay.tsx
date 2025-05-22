@@ -149,7 +149,6 @@ const ChatDisplay: React.FC = () => {
     const [loading, setLoading] = useState<boolean>(true)
     const [error, setError] = useState<string | null>(null)
     const [searchTerm, setSearchTerm] = useState<string>("")
-    const [selectedDate, setSelectedDate] = useState<string>("")
     const [currentSearchIndex, setCurrentSearchIndex] = useState<number>(-1)
     const [searchResults, setSearchResults] = useState<number[]>([])
 
@@ -212,12 +211,6 @@ const ChatDisplay: React.FC = () => {
         fetchAndParseLogs()
     }, [])
 
-    // Filter messages by date
-    const dateFilteredMessages = useMemo(() => {
-        if (!selectedDate) return allMessages
-        return allMessages.filter((msg) => msg.isDateSeparator || msg.fullDate === selectedDate)
-    }, [allMessages, selectedDate])
-
     // Get available dates for the date selector
     const availableDates = useMemo(() => {
         const dates = new Set<string>()
@@ -226,7 +219,17 @@ const ChatDisplay: React.FC = () => {
                 dates.add(msg.fullDate)
             }
         })
-        return Array.from(dates).sort()
+
+        // Sort dates chronologically (dd/mm/yyyy format)
+        return Array.from(dates).sort((a, b) => {
+            const [dayA, monthA, yearA] = a.split("/").map(Number)
+            const [dayB, monthB, yearB] = b.split("/").map(Number)
+
+            const dateA = new Date(yearA, monthA - 1, dayA)
+            const dateB = new Date(yearB, monthB - 1, dayB)
+
+            return dateA.getTime() - dateB.getTime()
+        })
     }, [allMessages])
 
     // Perform search
@@ -240,7 +243,7 @@ const ChatDisplay: React.FC = () => {
         const term = searchTerm.toLowerCase()
         const results: number[] = []
 
-        dateFilteredMessages.forEach((msg, index) => {
+        allMessages.forEach((msg, index) => {
             if (msg.isDateSeparator) return
 
             const searchableText = `${msg.playerName} ${msg.message}`.toLowerCase()
@@ -256,7 +259,7 @@ const ChatDisplay: React.FC = () => {
         if (results.length > 0 && listRef.current) {
             listRef.current.scrollToItem(results[0], "center")
         }
-    }, [searchTerm, dateFilteredMessages])
+    }, [searchTerm, allMessages])
 
     // Navigate search results
     const navigateSearch = useCallback(
@@ -291,12 +294,18 @@ const ChatDisplay: React.FC = () => {
         }
     }
 
-    // Handle date search
-    const handleDateSearch = (date: string) => {
-        setSelectedDate(date)
-        setSearchTerm("")
-        setSearchResults([])
-        setCurrentSearchIndex(-1)
+    // Handle date scroll
+    const handleDateScroll = (date: string) => {
+        if (!date || !listRef.current) return
+
+        // Find the index of the date separator for the selected date
+        const dateIndex = allMessages.findIndex(
+            (msg) => msg.isDateSeparator && msg.fullDate === date
+        )
+
+        if (dateIndex !== -1) {
+            listRef.current.scrollToItem(dateIndex, "start")
+        }
     }
 
     if (loading) {
@@ -316,7 +325,11 @@ const ChatDisplay: React.FC = () => {
 
     return (
         <>
-            <DateSearch onDateSearch={handleDateSearch} availableDates={availableDates} />
+            <DateSearch
+                onDateScroll={handleDateScroll}
+                availableDates={availableDates}
+                defaultDate={availableDates.length > 0 ? availableDates[0] : ""}
+            />
 
             <div className="chat-container">
                 <div className="search-controls">
@@ -366,10 +379,10 @@ const ChatDisplay: React.FC = () => {
                     className="virtualized-list"
                     width="100%"
                     height={500}
-                    itemCount={dateFilteredMessages.length}
+                    itemCount={allMessages.length}
                     itemSize={50}
                     itemData={{
-                        messages: dateFilteredMessages,
+                        messages: allMessages,
                         searchTerm,
                         highlightedIndex: currentHighlightedIndex,
                     }}
